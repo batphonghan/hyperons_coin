@@ -1,6 +1,8 @@
 package main
 
-import "hyperon/cmd"
+import (
+	"hyperon/cmd"
+)
 
 func main() {
 	cmd.Execute()

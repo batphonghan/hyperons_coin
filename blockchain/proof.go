@@ -10,18 +10,7 @@ import (
 	"math/big"
 )
 
-// Take the data from the block
-
-// create a counter (nonce) start from 0
-
-// create a hash of data plus the counter
-
-// check the hash to see if it meets a set of requirements
-
-// Requirements:
-// The First few bytes must contain 0s
-
-const Difficulty = 20
+const Difficulty = 12
 
 type ProofOfWork struct {
 	Block  Block

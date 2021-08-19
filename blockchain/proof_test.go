@@ -21,9 +21,9 @@ func Test_Proof(t *testing.T) {
 
 func Test_Me(t *testing.T) {
 	tx := Transaction{
-		ID:      []byte{},
-		Intputs: []TxInput{TxInput{}},
-		Outputs: []TxOutput{},
+		ID:     []byte{},
+		Inputs: []TxInput{TxInput{}},
+		Ouputs: []TxOutput{},
 	}
 
 	var encode bytes.Buffer

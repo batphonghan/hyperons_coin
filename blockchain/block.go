@@ -8,15 +8,15 @@ import (
 )
 
 type Block struct {
-	Hash        []byte
-	Transaction []Transaction
-	PrevHash    []byte
-	Nonce       int
+	Hash         []byte
+	Transactions []Transaction
+	PrevHash     []byte
+	Nonce        int
 }
 
 func (b *Block) HashTransactions() []byte {
 	var txsHash [][]byte
-	for _, tx := range b.Transaction {
+	for _, tx := range b.Transactions {
 		txsHash = append(txsHash, tx.ID)
 	}
 	info := bytes.Join(txsHash, []byte{})
