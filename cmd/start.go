@@ -16,13 +16,11 @@ limitations under the License.
 package cmd
 
 import (
-	"flag"
+	"encoding/json"
 	"fmt"
 	"hyperon/blockchain"
 	"log"
 	"net/http"
-	"os"
-	"runtime"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -31,17 +29,8 @@ import (
 // startCmd represents the start command
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	PreRun: func(cmd *cobra.Command, args []string) {
-
-	},
-	RunE: start,
+	Short: "Start hyperchain serve at :9787",
+	RunE:  start,
 }
 
 func start(cmd *cobra.Command, args []string) error {
@@ -50,42 +39,28 @@ func start(cmd *cobra.Command, args []string) error {
 			log.Println("err ", err)
 		}
 	}()
-	http.HandleFunc("/print-chain", printChain)
+	http.HandleFunc("/dump", dump)
+	http.HandleFunc("/balance", getBalance)
+	http.HandleFunc("/send", send)
 	return http.ListenAndServe(":9787", nil)
 }
 
 func init() {
 	rootCmd.AddCommand(startCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// startCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
 	add := startCmd.Flags().StringP("address", "a", "0x0", "The address to send genesis block reward to")
 	createBlockChain(*add)
 }
 
-type CommandLine struct{}
-
-func (cli *CommandLine) printUsage() {
-	fmt.Println("Usage:")
-	fmt.Println(" getbalance -address ADDRESS - get the balance for an address")
-	fmt.Println(" createblockchain -address ADDRESS creates a blockchain and sends genesis reward to address")
-	fmt.Println(" printchain - Prints the blocks in the chain")
-	fmt.Println(" send -from FROM -to TO -amount AMOUNT - Send amount of coins")
-}
-
-func printChain(rw http.ResponseWriter, r *http.Request) {
+func dump(rw http.ResponseWriter, r *http.Request) {
 	chain := blockchain.ContinueBlockChain("")
 	defer chain.Database.Close()
 	iter := chain.Iterator()
 
+	var blocks []blockchain.Block
 	for {
 		block := iter.Next()
+		blocks = append(blocks, block)
 
 		fmt.Printf("Prev. hash: %x\n", block.PrevHash)
 		fmt.Printf("Hash: %x\n", block.Hash)
@@ -97,18 +72,37 @@ func printChain(rw http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+	b, err := json.Marshal(blocks)
+	if err != nil {
+		responseErr(rw, err)
+		return
+	}
 
+	responseOk(rw, b)
+
+}
+
+func responseErr(rw http.ResponseWriter, err error) {
+	rw.WriteHeader(http.StatusInternalServerError)
+
+	fmt.Fprintf(rw, "Server err: %+v", err)
+}
+
+func responseOk(rw http.ResponseWriter, b []byte) {
 	rw.WriteHeader(http.StatusOK)
-	fmt.Fprintf(rw, "Hi all good")
+	rw.Header().Set("Content-type", "application/json")
+
+	fmt.Fprintf(rw, string(b))
 }
 
 func createBlockChain(address string) {
-	chain := blockchain.InitBlockChain()
+	chain := blockchain.InitBlockChain(address)
 	chain.Database.Close()
 	fmt.Println("Finished!")
 }
 
-func (cli *CommandLine) getBalance(address string) {
+func getBalance(rw http.ResponseWriter, r *http.Request) {
+	address := r.URL.Query().Get("address")
 	chain := blockchain.ContinueBlockChain(address)
 	defer chain.Database.Close()
 
@@ -119,70 +113,23 @@ func (cli *CommandLine) getBalance(address string) {
 		balance += out.Value
 	}
 
-	fmt.Printf("Balance of %s: %d\n", address, balance)
+	fmt.Fprintf(rw, "Balance of %s: %d\n", address, balance)
 }
 
-func (cli *CommandLine) send(from, to string, amount int) {
+func send(rw http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	from := q.Get("from")
+	amount, err := strconv.Atoi(q.Get("amount"))
+	if err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	to := q.Get("to")
 	chain := blockchain.ContinueBlockChain(from)
 	defer chain.Database.Close()
 
 	tx := blockchain.NewTransaction(from, to, amount, chain)
 	chain.AddBlock([]blockchain.Transaction{tx})
 	fmt.Println("Success!")
-}
-
-func (cli *CommandLine) Execute() {
-
-	getBalanceCmd := flag.NewFlagSet("getbalance", flag.ExitOnError)
-	createBlockchainCmd := flag.NewFlagSet("createblockchain", flag.ExitOnError)
-	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
-	printChainCmd := flag.NewFlagSet("printchain", flag.ExitOnError)
-
-	getBalanceAddress := getBalanceCmd.String("address", "", "The address to get balance for")
-	sendFrom := sendCmd.String("from", "", "Source wallet address")
-	sendTo := sendCmd.String("to", "", "Destination wallet address")
-	sendAmount := sendCmd.Int("amount", 0, "Amount to send")
-
-	switch os.Args[1] {
-	case "getbalance":
-		err := getBalanceCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
-	case "createblockchain":
-		err := createBlockchainCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
-	case "printchain":
-		err := printChainCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
-	case "send":
-		err := sendCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
-	default:
-		cli.printUsage()
-		runtime.Goexit()
-	}
-
-	if getBalanceCmd.Parsed() {
-		if *getBalanceAddress == "" {
-			getBalanceCmd.Usage()
-			runtime.Goexit()
-		}
-		cli.getBalance(*getBalanceAddress)
-	}
-
-	if sendCmd.Parsed() {
-		if *sendFrom == "" || *sendTo == "" || *sendAmount <= 0 {
-			sendCmd.Usage()
-			runtime.Goexit()
-		}
-
-		cli.send(*sendFrom, *sendTo, *sendAmount)
-	}
 }

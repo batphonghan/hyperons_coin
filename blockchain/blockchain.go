@@ -19,10 +19,9 @@ type BlockChainIterator struct {
 	Database    *badger.DB
 }
 
-var Add = "123"
 var GenesisData = "123"
 
-func InitBlockChain() *BlockChain {
+func InitBlockChain(address string) *BlockChain {
 	opts := badger.DefaultOptions(dbPath)
 	opts.Logger = nil
 	db, err := badger.Open(opts)
@@ -32,7 +31,7 @@ func InitBlockChain() *BlockChain {
 	err = db.Update(func(txn *badger.Txn) error {
 		if _, err := txn.Get([]byte(LH)); err == badger.ErrKeyNotFound {
 			fmt.Println("Not Exist DB")
-			cbTx := CoinbaseTx(Add, GenesisData)
+			cbTx := CoinbaseTx(address, GenesisData)
 			gen := Genesis(cbTx)
 
 			err = txn.Set(gen.Hash, gen.Serialize())
@@ -141,6 +140,7 @@ func ContinueBlockChain(address string) *BlockChain {
 	var lastHash []byte
 
 	opts := badger.DefaultOptions(dbPath)
+	opts.Logger = nil
 
 	db, err := badger.Open(opts)
 	HandleErr(err)
@@ -178,7 +178,6 @@ func (chain *BlockChain) FindSpendableOutputs(address string, amount int) (int, 
 	unspentTxs := chain.FindUnspentTransactions(address)
 	accumulated := 0
 
-Work:
 	for _, tx := range unspentTxs {
 		txID := hex.EncodeToString(tx.ID)
 
@@ -188,7 +187,7 @@ Work:
 				unspentOuts[txID] = append(unspentOuts[txID], outIdx)
 
 				if accumulated >= amount {
-					break Work
+					return accumulated, unspentOuts
 				}
 			}
 		}
@@ -204,7 +203,9 @@ func (chain *BlockChain) FindUnspentTransactions(address string) []Transaction {
 
 	iter := chain.Iterator()
 
+	i := 0
 	for {
+		i++
 		block := iter.Next()
 
 		for _, tx := range block.Transactions {
@@ -237,5 +238,6 @@ func (chain *BlockChain) FindUnspentTransactions(address string) []Transaction {
 			break
 		}
 	}
+	fmt.Println("Time loop: ", i)
 	return unspentTxs
 }
