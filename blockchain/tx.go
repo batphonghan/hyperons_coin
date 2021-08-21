@@ -1,32 +1,91 @@
 package blockchain
 
+import (
+	"bytes"
+	"encoding/gob"
+	"fmt"
+	"hyperon/wallet"
+)
+
 type TxOutput struct {
-	//Value would be representative of the amount of coins in a transaction
 	Value int
-	//The Pubkey is needed to "unlock" any coins within an Output. This indicated that YOU are the one that sent it.
-	//You are indentifiable by your PubKey
-	//PubKey in this iteration will be very straightforward, however in an actual application this is a more complex algorithm
-	PubKey string
+
+	PubKeyHash []byte
 }
 
 //TxInput is representative of a reference to a previous TxOutput
 type TxInput struct {
-	//ID will find the Transaction that a specific output is inside of
-	ID []byte
-
-	//Out will be the index of the specific output we found within a transaction.
-	//For example if a transaction has 4 outputs, we can use this "Out" field to specify which output we are looking for
+	ID  []byte
 	Out int
 
-	//This would be a script that adds data to an outputs' PubKey
-	//however for this tutorial the Sig will be indentical to the PubKey.
-	Sig string
+	Signature []byte
+	PubKey    []byte
+}
+
+func NewTXOutput(value int, address string) TxOutput {
+	txo := TxOutput{value, nil}
+	txo.Lock([]byte(address))
+
+	return txo
 }
 
 func (in *TxInput) CanUnlock(data string) bool {
-	return in.Sig == data
+	return string(in.Signature) == data
 }
 
-func (out *TxOutput) CanBeUnlocked(data string) bool {
-	return out.PubKey == data
+func (out *TxOutput) CanBeUnlocked(pubkeyHash []byte) bool {
+	return bytes.Compare(out.PubKeyHash, pubkeyHash) == 0
+}
+
+// Check if input use public hashed key
+func (in *TxInput) IsUsesKey(publicKeyHashed []byte) bool {
+	lockingHash := wallet.PublicKeyHash(in.PubKey)
+
+	return bytes.Compare(lockingHash, publicKeyHashed) == 0
+}
+
+func (out *TxOutput) Lock(address []byte) error {
+	pubKeyHash, err := wallet.DecodePubKey(address)
+	if err != nil {
+		return fmt.Errorf("Err during decode address %v", err)
+	}
+
+	out.PubKeyHash = pubKeyHash
+	return nil
+}
+
+func NewTxOutput(value int, address string) (TxOutput, error) {
+	txo := TxOutput{
+		Value: value,
+	}
+	err := txo.Lock([]byte(address))
+	if err != nil {
+		return txo, fmt.Errorf("err lock txo %v", err)
+	}
+
+	return txo, nil
+}
+
+func (outs TxOutputs) Serialize() []byte {
+	var buffer bytes.Buffer
+
+	encode := gob.NewEncoder(&buffer)
+	err := encode.Encode(outs)
+	HandleErr(err)
+
+	return buffer.Bytes()
+}
+
+type TxOutputs struct {
+	Outputs []TxOutput
+}
+
+func DeserializeOutputs(data []byte) TxOutputs {
+	var outputs TxOutputs
+
+	decode := gob.NewDecoder(bytes.NewReader(data))
+	err := decode.Decode(&outputs)
+	HandleErr(err)
+
+	return outputs
 }

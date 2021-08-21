@@ -16,11 +16,13 @@ limitations under the License.
 package wallet
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/gob"
+	"fmt"
 	"log"
 
 	"github.com/mr-tron/base58"
@@ -28,7 +30,7 @@ import (
 )
 
 const (
-	checksumLength = 4
+	ChecksumLength = 4
 	version        = byte(0x00)
 	walletFile     = "./tmp/wallet.data"
 )
@@ -38,15 +40,15 @@ type Wallet struct {
 	PublicKey  []byte
 }
 
-func MakeWallet() Wallet {
-	private, public := NewKeyPair()
+func makeWallet() Wallet {
+	private, public := newKeyPair()
 	return Wallet{
 		PrivateKey: private,
 		PublicKey:  public,
 	}
 }
 
-func NewKeyPair() (*ecdsa.PrivateKey, []byte) {
+func newKeyPair() (*ecdsa.PrivateKey, []byte) {
 	gob.Register(elliptic.P256())
 	curve := elliptic.P256()
 
@@ -59,12 +61,12 @@ func NewKeyPair() (*ecdsa.PrivateKey, []byte) {
 	return private, pub
 }
 
-func base58Encode(b []byte) []byte {
+func Base58Encode(b []byte) []byte {
 	s := base58.Encode(b)
 	return []byte(s)
 }
 
-func base58Decode(b []byte) ([]byte, error) {
+func Base58Decode(b []byte) ([]byte, error) {
 	return base58.Decode(string(b))
 }
 
@@ -94,7 +96,7 @@ func CheckSum(versionedHash []byte) []byte {
 	firstHash := sha256.Sum256(versionedHash)
 	secondHash := sha256.Sum256(firstHash[:])
 
-	return secondHash[:checksumLength]
+	return secondHash[:ChecksumLength]
 }
 
 func (w *Wallet) Address() []byte {
@@ -108,7 +110,34 @@ func (w *Wallet) Address() []byte {
 	finalHash := append(versionedHash, checksum...)
 
 	// Step 6
-	address := base58Encode(finalHash)
+	address := Base58Encode(finalHash)
 
 	return address
+}
+
+func DecodePubKey(address []byte) ([]byte, error) {
+	publicHash, err := Base58Decode([]byte(address))
+	if err != nil {
+		return nil, fmt.Errorf("Err decode address: %x", address)
+	}
+
+	pubkey := publicHash[1 : len(publicHash)-ChecksumLength]
+
+	return pubkey, nil
+}
+
+func ValidateAddress(address string) bool {
+	publicHash, err := Base58Decode([]byte(address))
+	if err != nil {
+		fmt.Println("Can not decode address")
+		return false
+	}
+
+	checksum := publicHash[len(publicHash)-ChecksumLength:]
+	version := publicHash[0]
+
+	pubkey := publicHash[1 : len(publicHash)-ChecksumLength]
+	actualCheckSum := CheckSum(append([]byte{version}, pubkey...))
+
+	return bytes.Compare(checksum, actualCheckSum) == 0
 }

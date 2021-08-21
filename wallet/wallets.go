@@ -15,20 +15,31 @@ type Wallets struct {
 }
 
 func CreateWallets() (*Wallets, error) {
-	wallets := Wallets{}
-	wallets.Wallets = make(map[string]Wallet)
+	wallets := Wallets{
+		Wallets: make(map[string]Wallet),
+	}
 	err := wallets.LoadFile()
+	if err != nil {
+		return nil, fmt.Errorf("err load file %v", err)
+	}
 
-	return &wallets, err
+	return &wallets, nil
 }
 
 func (w *Wallets) AddWallet() string {
-	wallet := MakeWallet()
+	wallet := makeWallet()
 	address := fmt.Sprintf("%s", wallet.Address())
 
 	w.Wallets[address] = wallet
 
 	return address
+}
+
+func Delete() error {
+	if _, err := os.Stat(walletFile); err == nil {
+		return os.Remove(walletFile)
+	}
+	return nil
 }
 
 func (w *Wallets) GetWallet(address string) Wallet {
@@ -63,7 +74,7 @@ func (w *Wallets) SaveFile() {
 
 func (w *Wallets) LoadFile() error {
 	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
-		return err
+		return nil
 	}
 
 	var wallets Wallets

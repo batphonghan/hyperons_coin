@@ -1,3 +1,6 @@
 tmp/*
 hyperon
 __debug_bin
+wallet/btc_balance_sorted.csv
+wallet/bit.txt
+.DS_Store

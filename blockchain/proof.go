@@ -6,8 +6,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"math"
 	"math/big"
+	"math/rand"
+	"time"
 )
 
 const Difficulty = 12
@@ -50,8 +51,10 @@ func ToHex(num int64) []byte {
 func (pow *ProofOfWork) Run() (int, []byte) {
 	var intHash big.Int
 	var hash [32]byte
-	nonce := 0
-	for ; nonce < math.MaxInt64; nonce++ {
+	var nonce int
+	rand.Seed(time.Now().UnixNano())
+	for {
+		nonce = rand.Int()
 		data := pow.InitData(nonce)
 		hash = sha256.Sum256(data)
 		fmt.Printf("\r %x", hash)

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hyperon/blockchain"
+	"hyperon/wallet"
 	"log"
 	"net/http"
 	"strconv"
@@ -27,12 +28,6 @@ import (
 )
 
 // startCmd represents the start command
-var startCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Start hyperchain serve at :9787",
-	RunE:  start,
-}
-
 func start(cmd *cobra.Command, args []string) error {
 	defer func() {
 		if err := recover(); err != nil {
@@ -43,6 +38,12 @@ func start(cmd *cobra.Command, args []string) error {
 	http.HandleFunc("/balance", getBalance)
 	http.HandleFunc("/send", send)
 	return http.ListenAndServe(":9787", nil)
+}
+
+var startCmd = &cobra.Command{
+	Use:   "start",
+	Short: "Start hyperchain serve at :9787",
+	RunE:  start,
 }
 
 func init() {
@@ -107,7 +108,11 @@ func getBalance(rw http.ResponseWriter, r *http.Request) {
 	defer chain.Database.Close()
 
 	balance := 0
-	UTXOs := chain.FindUTXO(address)
+	publishHash, err := wallet.DecodePubKey([]byte(address))
+	if err != nil {
+		panic(err)
+	}
+	UTXOs := chain.FindUTXO(publishHash)
 
 	for _, out := range UTXOs {
 		balance += out.Value
